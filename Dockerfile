@@ -33,8 +33,8 @@ RUN apk --no-cache add \
       cyrus-sasl-digestmd5 \
       cyrus-sasl-login \
       cyrus-sasl-plain \
-      postfix=$POSTFIX_VERSION \
-      rsyslog=$RSYSLOG_VERSION \
+      postfix \
+      rsyslog \
       supervisor \
       tzdata
 
