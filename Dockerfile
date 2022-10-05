@@ -51,7 +51,7 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
     && postconf -e 'smtpd_banner = $myhostname ESMTP $mail_name RELAY' \
     && postconf -e 'smtputf8_enable = no' \
     && postconf -e 'smtp_destination_rate_delay = 10s' \
-    && postconf -e 'smtp_destination_concurrency_limit = 2' \
+    && postconf -e 'smtp_destination_concurrency_limit = 1' \
     && postconf -e 'smtp_extra_recipient_limit = 10' \
     && mkdir -p /etc/sasl2 \
     && echo 'pwcheck_method: auxprop' >/etc/sasl2/smtpd.conf \
