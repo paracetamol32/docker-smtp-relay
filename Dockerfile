@@ -50,7 +50,7 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
     && postconf -e 'smtpd_sasl_security_options = noanonymous' \
     && postconf -e 'smtpd_banner = $myhostname ESMTP $mail_name RELAY' \
     && postconf -e 'smtputf8_enable = no' \
-    && postconf -e 'smtp_destination_rate_delay = 10s' \
+    && postconf -e 'smtp_destination_rate_delay = 20s' \
     && postconf -e 'smtp_destination_concurrency_limit = 1' \
     && postconf -e 'smtp_extra_recipient_limit = 10' \
     && mkdir -p /etc/sasl2 \
