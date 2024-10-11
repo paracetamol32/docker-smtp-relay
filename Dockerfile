@@ -53,12 +53,21 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
     && postconf -e 'smtp_destination_rate_delay = 20s' \
     && postconf -e 'smtp_destination_concurrency_limit = 1' \
     && postconf -e 'smtp_extra_recipient_limit = 10' \
+    && postconf -e 'header_checks = regexp:/etc/postfix/header_checks' \
     && mkdir -p /etc/sasl2 \
     && echo 'pwcheck_method: auxprop' >/etc/sasl2/smtpd.conf \
     && echo 'auxprop_plugin: sasldb' >>/etc/sasl2/smtpd.conf \
     && echo 'mech_list: PLAIN LOGIN CRAM-MD5 DIGEST-MD5' >>/etc/sasl2/smtpd.conf \
     && echo 'sasldb_path: /data/sasldb2' >>/etc/sasl2/smtpd.conf \
     && echo 'log_level: 2' >>/etc/sasl2/smtpd.conf
+
+# Ajout de la configuration pour le logging du sujet
+RUN echo "/^Subject:/ WARN" > /etc/postfix/header_checks \
+    && postmap /etc/postfix/header_checks
+
+# Modification de la configuration de rsyslog pour inclure plus de d?tails dans les logs
+RUN sed -i 's/^#\$ModLoad imklog/#$ModLoad imklog\n$template Details,"%syslogtag% %msg%\\n"/' /etc/rsyslog.conf \
+    && sed -i 's/^mail.*/mail.* -\/var\/log\/mail.log;Details/' /etc/rsyslog.conf
 
 # Add some configurations files
 COPY /root/etc/* /etc/
