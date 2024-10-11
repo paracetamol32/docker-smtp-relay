@@ -1,10 +1,5 @@
-#
-# Final stage for image
-#
 FROM alpine:3.11
-
 LABEL maintainer='Pierre GINDRAUD <pgindraud@gmail.com>'
-
 ARG POSTFIX_VERSION
 ARG RSYSLOG_VERSION
 
@@ -22,21 +17,26 @@ ENV RELAY_TLS_CA /etc/ssl/certs/ca-certificates.crt
 #ENV RELAY_LOGIN=loginname
 #ENV RELAY_PASSWORD=xxxxxxxx
 #ENV RELAY_EXTRAS_SETTINGS
-
 ENV POSTCONF_inet_interfaces all
 ENV POSTCONF_inet_protocols ipv4
 
+# Ajout de variables d'environnement pour DKIM
+ENV DKIM_SELECTOR=default
+ENV DKIM_DOMAIN=example.com
+
 # Install dependencies
 RUN apk --no-cache add \
-      cyrus-sasl \
-      cyrus-sasl-crammd5 \
-      cyrus-sasl-digestmd5 \
-      cyrus-sasl-login \
-      cyrus-sasl-plain \
-      postfix \
-      rsyslog \
-      supervisor \
-      tzdata
+    cyrus-sasl \
+    cyrus-sasl-crammd5 \
+    cyrus-sasl-digestmd5 \
+    cyrus-sasl-login \
+    cyrus-sasl-plain \
+    postfix \
+    rsyslog \
+    supervisor \
+    tzdata \
+    opendkim \
+    opendkim-utils
 
 # Configuration of main.cf
 RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol, resource, software' \
@@ -59,7 +59,11 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
     && postconf -e 'debug_peer_list = *' \
     && postconf -e 'smtpd_tls_loglevel = 1' \
     && postconf -e 'smtp_tls_loglevel = 1' \
-    # Fin des nouvelles configurations
+    # Configuration DKIM
+    && postconf -e 'milter_protocol = 2' \
+    && postconf -e 'milter_default_action = accept' \
+    && postconf -e 'smtpd_milters = inet:localhost:8891' \
+    && postconf -e 'non_smtpd_milters = inet:localhost:8891' \
     && mkdir -p /etc/sasl2 \
     && echo 'pwcheck_method: auxprop' >/etc/sasl2/smtpd.conf \
     && echo 'auxprop_plugin: sasldb' >>/etc/sasl2/smtpd.conf \
@@ -71,10 +75,15 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
 RUN echo "/^.*/ WARN" > /etc/postfix/header_checks \
     && postmap /etc/postfix/header_checks
 
-
-# Modification de la configuration de rsyslog pour inclure plus de d?tails dans les logs
+# Modification de la configuration de rsyslog pour inclure plus de détails dans les logs
 RUN sed -i 's/^#\$ModLoad imklog/#$ModLoad imklog\n$template Details,"%syslogtag% %msg%\\n"/' /etc/rsyslog.conf \
     && sed -i 's/^mail.*/mail.* -\/var\/log\/mail.log;Details/' /etc/rsyslog.conf
+
+# Configuration OpenDKIM
+RUN mkdir -p /etc/opendkim/keys \
+    && chown -R opendkim:opendkim /etc/opendkim \
+    && echo "SOCKET=\"inet:8891@localhost\"" >> /etc/opendkim/opendkim.conf \
+    && echo "SUBDOMAINS=yes" >> /etc/opendkim/opendkim.conf
 
 # Add some configurations files
 COPY /root/etc/* /etc/
@@ -82,10 +91,12 @@ COPY /root/opt/* /opt/
 COPY /docker-entrypoint.sh /
 COPY /docker-entrypoint.d/* /docker-entrypoint.d/
 
-RUN chmod -R +x /docker-entrypoint.d/ \
-  && touch /etc/postfix/aliases \
-  && touch /etc/postfix/sender_canonical \
-  && mkdir -p /data
+# Script pour générer les clés DKIM et configurer OpenDKIM
+COPY setup-dkim.sh /usr/local/bin/
+RUN chmod -R +x /docker-entrypoint.d/ /usr/local/bin/setup-dkim.sh \
+    && touch /etc/postfix/aliases \
+    && touch /etc/postfix/sender_canonical \
+    && mkdir -p /data
 
 EXPOSE 25/tcp
 VOLUME ["/data","/var/spool/postfix"]
@@ -94,5 +105,6 @@ WORKDIR /data
 HEALTHCHECK --interval=5s --timeout=2s --retries=3 \
     CMD nc -znvw 1 127.0.0.1 25 || exit 1
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Modifier l'ENTRYPOINT pour inclure la configuration DKIM
+ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/setup-dkim.sh && /docker-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "--configuration", "/etc/supervisord.conf"]
