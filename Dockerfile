@@ -54,6 +54,12 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
     && postconf -e 'smtp_destination_concurrency_limit = 1' \
     && postconf -e 'smtp_extra_recipient_limit = 10' \
     && postconf -e 'header_checks = regexp:/etc/postfix/header_checks' \
+    # Nouvelles configurations pour des logs plus détaillés
+    && postconf -e 'debug_peer_level = 2' \
+    && postconf -e 'debug_peer_list = *' \
+    && postconf -e 'smtpd_tls_loglevel = 1' \
+    && postconf -e 'smtp_tls_loglevel = 1' \
+    # Fin des nouvelles configurations
     && mkdir -p /etc/sasl2 \
     && echo 'pwcheck_method: auxprop' >/etc/sasl2/smtpd.conf \
     && echo 'auxprop_plugin: sasldb' >>/etc/sasl2/smtpd.conf \
@@ -61,9 +67,10 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
     && echo 'sasldb_path: /data/sasldb2' >>/etc/sasl2/smtpd.conf \
     && echo 'log_level: 2' >>/etc/sasl2/smtpd.conf
 
-# Ajout de la configuration pour le logging du sujet
-RUN echo "/^Subject:/ WARN" > /etc/postfix/header_checks \
+# Modification de la configuration pour le logging du sujet et autres en-têtes
+RUN echo "/^.*/ WARN" > /etc/postfix/header_checks \
     && postmap /etc/postfix/header_checks
+
 
 # Modification de la configuration de rsyslog pour inclure plus de d?tails dans les logs
 RUN sed -i 's/^#\$ModLoad imklog/#$ModLoad imklog\n$template Details,"%syslogtag% %msg%\\n"/' /etc/rsyslog.conf \
