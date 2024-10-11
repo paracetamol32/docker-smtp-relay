@@ -54,22 +54,23 @@ RUN postconf -e 'notify_classes = bounce, 2bounce, data, delay, policy, protocol
     && postconf -e 'smtp_destination_concurrency_limit = 1' \
     && postconf -e 'smtp_extra_recipient_limit = 10' \
     && postconf -e 'header_checks = regexp:/etc/postfix/header_checks' \
-    # Nouvelles configurations pour des logs plus détaillés
     && postconf -e 'debug_peer_level = 2' \
     && postconf -e 'debug_peer_list = *' \
     && postconf -e 'smtpd_tls_loglevel = 1' \
     && postconf -e 'smtp_tls_loglevel = 1' \
-    # Configuration DKIM
     && postconf -e 'milter_protocol = 2' \
     && postconf -e 'milter_default_action = accept' \
     && postconf -e 'smtpd_milters = inet:localhost:8891' \
-    && postconf -e 'non_smtpd_milters = inet:localhost:8891' \
-    && mkdir -p /etc/sasl2 \
-    && echo 'pwcheck_method: auxprop' >/etc/sasl2/smtpd.conf \
-    && echo 'auxprop_plugin: sasldb' >>/etc/sasl2/smtpd.conf \
-    && echo 'mech_list: PLAIN LOGIN CRAM-MD5 DIGEST-MD5' >>/etc/sasl2/smtpd.conf \
-    && echo 'sasldb_path: /data/sasldb2' >>/etc/sasl2/smtpd.conf \
-    && echo 'log_level: 2' >>/etc/sasl2/smtpd.conf
+    && postconf -e 'non_smtpd_milters = inet:localhost:8891'
+
+# Configuration for OpenDKIM
+RUN mkdir -p /etc/opendkim/keys \
+    && chown -R opendkim:opendkim /etc/opendkim \
+    && echo "SOCKET=\"inet:8891@localhost\"" >> /etc/opendkim/opendkim.conf \
+    && echo "SUBDOMAINS=yes" >> /etc/opendkim/opendkim.conf \
+    && echo "Domain ${DKIM_DOMAIN}" >> /etc/opendkim/opendkim.conf \
+    && echo "KeyFile /etc/opendkim/keys/dkim.private" >> /etc/opendkim/opendkim.conf \
+    && echo "Selector ${DKIM_SELECTOR}" >> /etc/opendkim/opendkim.conf
 
 # Modification de la configuration pour le logging du sujet et autres en-têtes
 RUN echo "/^.*/ WARN" > /etc/postfix/header_checks \
@@ -79,11 +80,7 @@ RUN echo "/^.*/ WARN" > /etc/postfix/header_checks \
 RUN sed -i 's/^#\$ModLoad imklog/#$ModLoad imklog\n$template Details,"%syslogtag% %msg%\\n"/' /etc/rsyslog.conf \
     && sed -i 's/^mail.*/mail.* -\/var\/log\/mail.log;Details/' /etc/rsyslog.conf
 
-# Configuration OpenDKIM
-RUN mkdir -p /etc/opendkim/keys \
-    && chown -R opendkim:opendkim /etc/opendkim \
-    && echo "SOCKET=\"inet:8891@localhost\"" >> /etc/opendkim/opendkim.conf \
-    && echo "SUBDOMAINS=yes" >> /etc/opendkim/opendkim.conf
+
 
 # Add some configurations files
 COPY /root/etc/* /etc/
@@ -106,5 +103,5 @@ HEALTHCHECK --interval=5s --timeout=2s --retries=3 \
     CMD nc -znvw 1 127.0.0.1 25 || exit 1
 
 # Modifier l'ENTRYPOINT pour inclure la configuration DKIM
-ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/setup-dkim.sh && /docker-entrypoint.sh"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "--configuration", "/etc/supervisord.conf"]
